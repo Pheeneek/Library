@@ -7,6 +7,11 @@ from tkinter import messagebox
 
 
 def add_book():
+    """
+    Функция проверяет введенные пользователем данные и,
+    в случае корректности, записывает их в конец файла "library.lib"
+    :return:
+    """
     if add_name.get() and add_autor.get() and add_janr.get():
         new_book = [add_name.get(), add_autor.get(), add_janr.get()]
         with open("library.lib", "a", encoding="utf-8")as f:
@@ -20,12 +25,22 @@ def add_book():
 
 
 def add_clearing():
+    """
+    Функция очищает поля вкладки "Добавление книги"
+    :return:
+    """
     add_name.delete(0, END)
     add_autor.delete(0, END)
     add_janr.delete(0, END)
 
 
 def finder(length):
+    """
+    Функция получает длину списка книг, считывает условия поиска
+    и осуществляет поиск в списке книг по паттерну
+    :param length: Количество строк в файле библиотеки (количество книг)
+    :return: result - список книг, удовлетворяющих условию поиска
+    """
     pattern = find_usl.get()
     result = []
     if not pattern:
@@ -46,6 +61,13 @@ def finder(length):
 
 
 def find_book():
+    """
+    Функция сбрасывает результаты предыдущего поиска,
+    считает длину списка книг в библиотеке, передает ее в
+    функцию finder(), получает список с результатами,
+    записывает результаты поиска в файл "search.txt"
+    :return:
+    """
     find_clearing()
     pattern = r"\n"
     with open("library.lib", "r", encoding="utf-8")as f:
@@ -60,6 +82,13 @@ def find_book():
 
 
 def result_print(result):
+    """
+    Функция выводит первое значение из списка результатов поиска,
+    если он не пустой. После этого, если в списке больше 1 значения,
+    активирует кнопки листинга.
+    :param result: список книг, удовлетворяющий условиям поиска
+    :return:
+    """
     find_message.configure(text=f"Найдено книг: {len(result)}")
     if result:
         find_name.configure(state="normal")
@@ -80,6 +109,10 @@ def result_print(result):
 
 
 def next_result():
+    """
+    Функция выводит следующее значение из списка результатов поиска
+    :return: Возвращает None, если достигнут конец списка
+    """
     pattern = [find_name.get(), find_autor.get(), find_janr.get()]
     with open("library.lib", "r", encoding="utf-8")as f:
         result_list = []
@@ -105,6 +138,10 @@ def next_result():
 
 
 def prev_result():
+    """
+    Функция выводит предыдущее значение из списка результатов поиска
+    :return: Возвращает None, если достигнуто начало списка
+    """
     pattern = [find_name.get(), find_autor.get(), find_janr.get()]
     with open("library.lib", "r", encoding="utf-8")as f:
         result_list = []
@@ -130,6 +167,11 @@ def prev_result():
 
 
 def find_clearing():
+    """
+    Функция очищает поля и сбрасывает состояние кнопок
+    на вкладке "Поиск книги"
+    :return:
+    """
     find_name.configure(state="normal")
     find_name.delete(0, END)
     find_name.configure(state="disabled")
@@ -145,6 +187,11 @@ def find_clearing():
 
 
 def del_book():
+    """
+    Функция удаляет книгу, которая выведена в текущий момент в поисковых
+    полях, из файла "library.lib"
+    :return: Возвращает None, если поле с наименованием книги пустое
+    """
     if not find_name.get():
         return None
     del_list = []
@@ -162,6 +209,7 @@ def del_book():
             f.write("\n")
     messagebox.showinfo("Успех!", "Книга удалена из базы!")
     find_clearing()
+
 
 # ---------------- отрисовка основного окна--------------------
 root = Tk()
