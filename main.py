@@ -103,6 +103,8 @@ def result_print(result):
         find_janr.delete(0, END)
         find_janr.insert(0, result[0][2])
         find_janr.configure(state="disabled")
+        change_button.configure(state="normal")
+        del_button.configure(state="normal")
     if len(result) > 1:
         find_next_button.configure(state="normal")
         find_prev_button.configure(state="normal")
@@ -114,7 +116,7 @@ def next_result():
     :return: Возвращает None, если достигнут конец списка
     """
     pattern = [find_name.get(), find_autor.get(), find_janr.get()]
-    with open("library.lib", "r", encoding="utf-8")as f:
+    with open("search.txt", "r", encoding="utf-8")as f:
         result_list = []
         for i in f.readlines():
             result_list.append(json.loads(i))
@@ -143,7 +145,7 @@ def prev_result():
     :return: Возвращает None, если достигнуто начало списка
     """
     pattern = [find_name.get(), find_autor.get(), find_janr.get()]
-    with open("library.lib", "r", encoding="utf-8")as f:
+    with open("search.txt", "r", encoding="utf-8")as f:
         result_list = []
         for i in f.readlines():
             result_list.append(json.loads(i))
@@ -184,6 +186,9 @@ def find_clearing():
     find_next_button.configure(state="disabled")
     find_prev_button.configure(state="disabled")
     find_message.configure(text="")
+    change_button.configure(state="disabled")
+    save_button.configure(state="disabled")
+    del_button.configure(state="disabled")
 
 
 def del_book():
@@ -198,18 +203,52 @@ def del_book():
     with open("library.lib", "r", encoding="utf-8") as f:
         for i in f.readlines():
             del_list.append(json.loads(i))
-        print(del_list)
     for i in del_list:
         if i == [find_name.get(), find_autor.get(), find_janr.get()]:
             del_index = del_list.index(i)
     del_list.pop(del_index)
     with open("library.lib", "w", encoding="utf-8") as f:
         for i in del_list:
-            json.dump(i, f)
+            json.dump(i, f, ensure_ascii=False)
             f.write("\n")
     messagebox.showinfo("Успех!", "Книга удалена из базы!")
     find_clearing()
 
+
+def save_book():
+    """
+    Функция сохраняет введенные изменения по книге в библиотеку
+    :return:
+    """
+    new_book = f'["{find_name.get()}", "{find_autor.get()}", "{find_janr.get()}"]\n'
+    with open("library.lib", "r", encoding="utf-8") as f:
+        lib = f.read()
+    with open("change.txt", "r", encoding="utf-8") as f:
+        change = f.read()
+    lib = lib.replace(change, new_book)
+    with open("library.lib", "w", encoding="utf-8") as f:
+        f.write(lib)
+        messagebox.showinfo("Успех!", "Изменения внесены в базу!")
+        find_clearing()
+
+
+def change_book():
+    """
+    Функция кнопки "Внести изменения". Делает доступными соответствубщие кнопки и поля
+    :return:
+    """
+    change_button.configure(state="disabled")
+    changing_book = [find_name.get(), find_autor.get(), find_janr.get()]
+    with open("change.txt", "w", encoding="utf-8")as f:
+        json.dump(changing_book, f, ensure_ascii=False)
+        f.write("\n")
+    find_name.configure(state="normal")
+    find_autor.configure(state="normal")
+    find_janr.configure(state="normal")
+    del_button.configure(state="disabled")
+    find_next_button.configure(state="disabled")
+    find_prev_button.configure(state="disabled")
+    save_button.configure(state="normal")
 
 # ---------------- отрисовка основного окна--------------------
 root = Tk()
@@ -219,8 +258,9 @@ root.geometry("600x250")
 tab_control = ttk.Notebook(root)
 add_tab = ttk.Frame(tab_control)
 find_tab = ttk.Frame(tab_control)
+remove_tab = ttk.Frame(tab_control)
 tab_control.add(add_tab, text="Добавить книгу")
-tab_control.add(find_tab, text="Поиск книги")
+tab_control.add(find_tab, text="Поиск книг")
 tab_control.pack(expand=1, fill="both")
 # ---------------- заполение вкладки "Добавить книгу"--------------------
 add_first_string = Label(add_tab, text="Введите данные добавляемой книги:")
@@ -282,8 +322,14 @@ find_button.grid(column=1, row=9, pady=10)
 find_next_button = Button(find_tab, text=">>>", command=next_result, state="disabled")
 find_next_button.grid(column=2, row=9, pady=10)
 
-del_button = Button(find_tab, text="Удалить книгу из базы", command=del_book)
-del_button.grid(column=2, row=7, pady=10)
+change_button = Button(find_tab, text="    Изменить данные    ", command=change_book, state="disabled")
+change_button.grid(column=2, row=6)
+
+save_button = Button(find_tab, text="Сохранить изменения", command=save_book, state="disabled")
+save_button.grid(column=2, row=7)
+
+del_button = Button(find_tab, text="Удалить книгу из базы", command=del_book, state="disabled")
+del_button.grid(column=2, row=8)
 
 root.mainloop()
 
