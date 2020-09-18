@@ -1,8 +1,8 @@
 import json
+import pymysql
 # import re
 from tkinter import *
 from tkinter import ttk
-from tkinter.ttk import Radiobutton
 from tkinter import messagebox
 
 
@@ -257,6 +257,8 @@ class Actions:
         tkgui.find_prev_button.configure(state="disabled")
         tkgui.save_button.configure(state="normal")
 
+    def save_config(self):
+        pass
 
 class TkGUI:
     def __init__(self):
@@ -267,37 +269,50 @@ class TkGUI:
         self.root.geometry("600x250")
         # ---------------- добавление вкладок--------------------
         self.tab_control = ttk.Notebook(self.root)
+
         self.add_tab = ttk.Frame(self.tab_control)
         self.find_tab = ttk.Frame(self.tab_control)
-        self.remove_tab = ttk.Frame(self.tab_control)
+        self.config_tab = ttk.Frame(self.tab_control)
+
         self.tab_control.add(self.add_tab, text="Добавить книгу")
         self.tab_control.add(self.find_tab, text="Поиск книг")
+        self.tab_control.add(self.config_tab, text="Настройки")
+
         self.tab_control.pack(expand=1, fill="both")
         # ---------------- заполение вкладки "Добавить книгу"--------------------
         self.add_first_string = Label(self.add_tab, text="Введите данные добавляемой книги:")
         self.add_first_string.grid(column=0, row=0, padx=10, pady=10, columnspan=2, sticky=W)
+
         self.add_name_string = Label(self.add_tab, text="Наименование книги:")
         self.add_name_string.grid(column=0, row=1, padx=10, pady=0, sticky=W)
+
         self.add_name = Entry(self.add_tab, width="40")
         self.add_name.grid(column=1, row=1, padx=10, sticky=W)
+
         self.add_autor_string = Label(self.add_tab, text="Автор:")
         self.add_autor_string.grid(column=0, row=2, pady=10, sticky=W, padx=10)
+
         self.add_autor = Entry(self.add_tab, width="40")
         self.add_autor.grid(column=1, row=2, padx=10, sticky=W)
+
         self.add_janr_string = Label(self.add_tab, text="Жанр:")
         self.add_janr_string.grid(column=0, row=3, pady=0, padx=10, sticky=W)
+
         self.add_janr = Entry(self.add_tab, width="40")
         self.add_janr.grid(column=1, row=3, padx=0)
+
         self.add_button = Button(self.add_tab, text="ДОБАВИТЬ В БАЗУ", command=Actions.add_book)
         self.add_button.grid(column=1, row=4, pady=10)
+
         self.add_message = Label(self.add_tab)
         self.add_message.grid(column=0, row=5, pady=0)
         # ---------------- Заполение вкладки "Поиск книги"--------------------
         self.find_var = IntVar()
         self.find_var.set(1)
-        self.rad1 = Radiobutton(self.find_tab, text='Искать по названию', variable=self.find_var, value=1)
-        self.rad2 = Radiobutton(self.find_tab, text='Искать по автору', variable=self.find_var, value=2)
-        self.rad3 = Radiobutton(self.find_tab, text='Искать по жанру', variable=self.find_var, value=3)
+
+        self.rad1 = ttk.Radiobutton(self.find_tab, text='Искать по названию', variable=self.find_var, value=1)
+        self.rad2 = ttk.Radiobutton(self.find_tab, text='Искать по автору', variable=self.find_var, value=2)
+        self.rad3 = ttk.Radiobutton(self.find_tab, text='Искать по жанру', variable=self.find_var, value=3)
         self.rad1.grid(column=0, row=0)
         self.rad2.grid(column=1, row=0)
         self.rad3.grid(column=2, row=0)
@@ -313,14 +328,19 @@ class TkGUI:
 
         self.find_name_string = Label(self.find_tab, text="Наименование книги:")
         self.find_name_string.grid(column=0, row=6, padx=10, pady=0, sticky=W)
+
         self.find_name = Entry(self.find_tab, width="40", state="disabled")
         self.find_name.grid(column=1, row=6, padx=10, sticky=W)
+
         self.find_autor_string = Label(self.find_tab, text="Автор:")
         self.find_autor_string.grid(column=0, row=7, pady=10, sticky=W, padx=10)
+
         self.find_autor = Entry(self.find_tab, width="40", state="disabled")
         self.find_autor.grid(column=1, row=7, padx=10, sticky=W)
+
         self.find_janr_string = Label(self.find_tab, text="Жанр:")
         self.find_janr_string.grid(column=0, row=8, pady=0, padx=10, sticky=W)
+
         self.find_janr = Entry(self.find_tab, width="40", state="disabled")
         self.find_janr.grid(column=1, row=8, padx=0)
 
@@ -342,6 +362,47 @@ class TkGUI:
         self.del_button = Button(self.find_tab, text="Удалить книгу из базы", command=Actions.del_book, state="disabled")
         self.del_button.grid(column=2, row=8)
 
+        # ---------------- Заполение вкладки "Настройки"--------------------
+        # ---------------- Заполение данных "Настройки БД"--------------------
+        self.config_DB_string = Label(self.config_tab, text="Настройки БД:")
+        self.config_DB_string.grid(column=0, row=0, padx=10, pady=10, sticky=W)
+
+        self.login_DB_string = Label(self.config_tab, text="Логин:")
+        self.login_DB_string.grid(column=0, row=1, padx=10, pady=5, sticky=E)
+
+        self.login_DB_entry = Entry(self.config_tab, width="10", state="normal")
+        self.login_DB_entry.grid(column=1, row=1, padx=10, sticky=W)
+
+        self.password_DB_string = Label(self.config_tab, text="Пароль:")
+        self.password_DB_string.grid(column=2, row=1, padx=10, pady=5, sticky=W)
+
+        self.password_DB_entry = Entry(self.config_tab, width="10", state="normal")
+        self.password_DB_entry.grid(column=3, row=1, padx=10, sticky=W)
+
+        self.name_DB_string = Label(self.config_tab, text="Имя БД:")
+        self.name_DB_string.grid(column=4, row=1, padx=10, pady=5, sticky=W)
+
+        self.name_DB_entry = Entry(self.config_tab, width="10", state="normal")
+        self.name_DB_entry.grid(column=5, row=1, padx=10, sticky=W)
+
+        self.save_conf_button = Button(self.config_tab, text="Сохранить", command=self.save_config, state="normal")
+        self.save_conf_button.grid(column=1, row=2)
+
+        # ---------------- Заполение данных "Насторойки выгрузки"--------------------
+
+        self.config_writer_string = Label(self.config_tab, text="Настройки выгрузки:")
+        self.config_writer_string.grid(column=0, row=3, padx=10, pady=10, sticky=W)
+
+        self.writer_var = IntVar()
+        self.writer_var.set(1)
+        self.rad1 = ttk.Radiobutton(self.config_tab, text='в JSON', variable=self.writer_var, value=1)
+        self.rad2 = ttk.Radiobutton(self.config_tab, text='в CSV', variable=self.writer_var, value=2)
+        self.rad3 = ttk.Radiobutton(self.config_tab, text='в TXT', variable=self.writer_var, value=3)
+        self.rad1.grid(column=1, row=3)
+        self.rad2.grid(column=2, row=3)
+        self.rad3.grid(column=3, row=3)
+
+
     def main(self):
         self.root.mainloop()
 
@@ -349,8 +410,9 @@ class TkGUI:
         if self.checkbox == 1:
             field = self.find_usl.text
 
+    def save_config(self):
+        pass
 
 if __name__ == '__main__':
-    act = Actions()
     tkgui = TkGUI()
     tkgui.main()
