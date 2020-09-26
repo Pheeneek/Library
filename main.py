@@ -53,7 +53,8 @@ class Actions:
                              VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
                 con.commit()
         else:
-            tkgui.add_message.configure(text="Заполните все данные по книге!")
+            messagebox.showinfo("Ошибка!", "Заполните все данные по книге!")
+            return
         messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
         Actions.add_clearing()
 
@@ -84,7 +85,7 @@ class Actions:
             elif tkgui.find_var.get() == 2:
                 cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE author LIKE '%{pattern}%';")
             else:
-                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE jahr LIKE '%{pattern}%';")
+                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE janr LIKE '%{pattern}%';")
             result = list(cur.fetchall())
         return result
 
@@ -131,6 +132,7 @@ class Actions:
         if len(result) > 1:
             tkgui.find_next_button.configure(state="normal")
             tkgui.find_prev_button.configure(state="normal")
+        return result[index][0]
 
     @staticmethod
     def next_result(result_list):
@@ -144,7 +146,8 @@ class Actions:
                 current_pos = result_list.index(i)
         if current_pos == len(result_list) - 1:
             return
-        Actions.result_print(result_list, current_pos + 1)
+        book_id = Actions.result_print(result_list, current_pos + 1)
+        return book_id
 
     @staticmethod
     def prev_result(result_list):
@@ -158,7 +161,8 @@ class Actions:
                 current_pos = result_list.index(i)
         if current_pos == 0:
             return
-        Actions.result_print(result_list, current_pos - 1)
+        book_id = Actions.result_print(result_list, current_pos - 1)
+        return book_id
 
     @staticmethod
     def find_clearing():
@@ -203,33 +207,36 @@ class Actions:
         Actions.find_clearing()
 
     @staticmethod
-    def save_book():
+    def save_book(book_id):
         """
         Функция сохраняет введенные изменения по книге в библиотеку
         :return:
         """
-        new_book = f'["{tkgui.find_name.get()}", "{tkgui.find_autor.get()}", "{tkgui.find_janr.get()}"]\n'
-        with open("library.lib", "r", encoding="utf-8") as f:
-            lib = f.read()
-        with open("change.txt", "r", encoding="utf-8") as f:
-            change = f.read()
-        lib = lib.replace(change, new_book)
-        with open("library.lib", "w", encoding="utf-8") as f:
-            f.write(lib)
+        print(book_id)
+        con = Connection.connect()
+        with con:
+            cur = con.cursor()
+            cur.execute(f"UPDATE bookshelf.books \
+            SET name = '{tkgui.find_name.get()}', \
+            author = '{tkgui.find_autor.get()}', \
+            janr = '{tkgui.find_janr.get()}' \
+            WHERE (idbooks = '{book_id}');")
+            con.commit()
             messagebox.showinfo("Успех!", "Изменения внесены в базу!")
             Actions.find_clearing()
 
     @staticmethod
-    def change_book():
+    def change_book(book_id):
         """
         Функция кнопки "Внести изменения". Делает доступными соответствубщие кнопки и поля
         :return:
         """
         tkgui.change_button.configure(state="disabled")
-        changing_book = [tkgui.find_name.get(), tkgui.find_autor.get(), tkgui.find_janr.get()]
-        with open("change.txt", "w", encoding="utf-8")as f:
-            json.dump(changing_book, f, ensure_ascii=False)
-            f.write("\n")
+        Actions.change_config()
+        return book_id
+
+    @staticmethod
+    def change_config():
         tkgui.find_name.configure(state="normal")
         tkgui.find_autor.configure(state="normal")
         tkgui.find_janr.configure(state="normal")
@@ -285,8 +292,6 @@ class TkGUI:
         self.add_button = Button(self.add_tab, text="ДОБАВИТЬ В БАЗУ", command=Actions.add_book)
         self.add_button.grid(column=1, row=4, pady=10)
 
-        self.add_message = Label(self.add_tab)
-        self.add_message.grid(column=0, row=5, pady=0)
         # ---------------- Заполение вкладки "Поиск книги"--------------------
         self.find_var = IntVar()
         self.find_var.set(1)
@@ -334,11 +339,11 @@ class TkGUI:
         self.find_next_button = Button(self.find_tab, text=">>>", command=self.next_result, state="disabled")
         self.find_next_button.grid(column=2, row=9, pady=10)
 
-        self.change_button = Button(self.find_tab, text="    Изменить данные    ", command=Actions.change_book,
+        self.change_button = Button(self.find_tab, text="    Изменить данные    ", command=self.change_book,
                                     state="disabled")
         self.change_button.grid(column=2, row=6)
 
-        self.save_button = Button(self.find_tab, text="Сохранить изменения", command=Actions.save_book,
+        self.save_button = Button(self.find_tab, text="Сохранить изменения", command=self.save_book,
                                   state="disabled")
         self.save_button.grid(column=2, row=7)
 
@@ -390,24 +395,32 @@ class TkGUI:
         self.rad3.grid(column=3, row=3)
 
         self.result = None
+        self.book_id = None
 
     def main(self):
         self.root.mainloop()
 
     def search(self):
         self.result = Actions.find_book()
+        self.book_id = self.result[0][0]
 
     def save_config(self):
         pass
 
     def next_result(self):
-        Actions.next_result(self.result)
+        self.book_id = Actions.next_result(self.result)
 
     def prev_result(self):
-        Actions.prev_result(self.result)
+        self.book_id = Actions.prev_result(self.result)
 
     def delete_book(self):
         Actions.del_book(self.result)
+
+    def change_book(self):
+        Actions.change_book(self.book_id)
+
+    def save_book(self):
+        Actions.save_book(self.book_id)
 
 
 if __name__ == '__main__':
