@@ -1,9 +1,9 @@
 import json
 import pymysql
-# import re
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
+import driver
 
 
 class Book:
@@ -13,22 +13,47 @@ class Book:
         self.janr = janr
 
 
+class Connection:
+    @staticmethod
+    def connect():
+        try:
+            con = pymysql.connect('localhost', f'{tkgui.login_DB_entry.get()}',
+                                  f'{tkgui.password_DB_entry.get()}', f'{tkgui.name_DB_entry.get()}')
+            print(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
+            return con
+        except pymysql.err.OperationalError:
+            print("Не удалось подключиться к базе данных!")
+
+
+class Saver:
+    def __init__(self, driver_):
+        self.driver_ = driver_
+
+    def write(self):
+        self.driver_.write(self.__list)
+
+    def read(self):
+        return self.driver_.read()
+
+
 class Actions:
     @staticmethod
     def add_book():
         """
         Функция проверяет введенные пользователем данные и,
-        в случае корректности, записывает их в конец файла "library.lib"
-        :return:
+        в случае корректности, записывает их в базу данных
+        :return: None
         """
         if tkgui.add_name.get() and tkgui.add_autor.get() and tkgui.add_janr.get():
-            new_book = [tkgui.add_name.get(), tkgui.add_autor.get(), tkgui.add_janr.get()]
-            with open("library.lib", "a", encoding="utf-8")as f:
-                json.dump(new_book, f, ensure_ascii=False)
-                f.write("\n")
+            new_book = Book(tkgui.add_name.get(), tkgui.add_autor.get(), tkgui.add_janr.get())
+            con = Connection.connect()
+            with con:
+                cur = con.cursor()
+                cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                             VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                con.commit()
         else:
             tkgui.add_message.configure(text="Заполните все данные по книге!")
-            return False
         messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
         Actions.add_clearing()
 
@@ -36,34 +61,31 @@ class Actions:
     def add_clearing():
         """
         Функция очищает поля вкладки "Добавление книги"
-        :return:
+        :return: None
         """
         tkgui.add_name.delete(0, END)
         tkgui.add_autor.delete(0, END)
         tkgui.add_janr.delete(0, END)
 
     @staticmethod
-    def finder(length):
+    def finder():
         """
         Функция получает длину списка книг, считывает условия поиска
         и осуществляет поиск в списке книг по паттерну
-        :param length: Количество строк в файле библиотеки (количество книг)
+        :param
         :return: result - список книг, удовлетворяющих условию поиска
         """
         pattern = tkgui.find_usl.get()
-        result = []
-        with open("library.lib", "r", encoding="utf-8")as f:
+        con = Connection.connect()
+        with con:
+            cur = con.cursor()
             if tkgui.find_var.get() == 1:
-                n = 0
+                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE name LIKE '%{pattern}%';")
             elif tkgui.find_var.get() == 2:
-                n = 1
+                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE author LIKE '%{pattern}%';")
             else:
-                n = 2
-            for _ in range(length):
-                a = json.loads(f.readline())
-                b = re.search(pattern, str(a[n]))
-                if b:
-                    result.append(a)
+                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE jahr LIKE '%{pattern}%';")
+            result = list(cur.fetchall())
         return result
 
     @staticmethod
@@ -73,42 +95,36 @@ class Actions:
         считает длину списка книг в библиотеке, передает ее в
         функцию finder(), получает список с результатами,
         записывает результаты поиска в файл "search.txt"
-        :return:
+        :return: result
         """
         Actions.find_clearing()
-        pattern = r"\n"
-        with open("library.lib", "r", encoding="utf-8")as f:
-            length = len(re.findall(pattern, f.read()))
-            result = Actions.finder(length)
-        if result:
-            with open("search.txt", "w", encoding="utf-8")as f:
-                for i in result:
-                    json.dump(i, f, ensure_ascii=False)
-                    f.write("\n")
+        result = Actions.finder()
         Actions.result_print(result)
+        return result
 
     @staticmethod
-    def result_print(result):
+    def result_print(result, index=0):
         """
         Функция выводит первое значение из списка результатов поиска,
         если он не пустой. После этого, если в списке больше 1 значения,
         активирует кнопки листинга.
+        :param index: индекс выводимого элемента из списка результатов
         :param result: список книг, удовлетворяющий условиям поиска
-        :return:
+        :return: None
         """
-        tkgui.find_message.configure(text=f"Найдено книг: {len(result)}")
+        tkgui.find_message.configure(text=f"Результат поиска: {index + 1 if len(result) != 0 else 0} из {len(result)}")
         if result:
             tkgui.find_name.configure(state="normal")
             tkgui.find_name.delete(0, END)
-            tkgui.find_name.insert(0, result[0][0])
+            tkgui.find_name.insert(0, result[index][1])
             tkgui.find_name.configure(state="disabled")
             tkgui.find_autor.configure(state="normal")
             tkgui.find_autor.delete(0, END)
-            tkgui.find_autor.insert(0, result[0][1])
+            tkgui.find_autor.insert(0, result[index][2])
             tkgui.find_autor.configure(state="disabled")
             tkgui.find_janr.configure(state="normal")
             tkgui.find_janr.delete(0, END)
-            tkgui.find_janr.insert(0, result[0][2])
+            tkgui.find_janr.insert(0, result[index][3])
             tkgui.find_janr.configure(state="disabled")
             tkgui.change_button.configure(state="normal")
             tkgui.del_button.configure(state="normal")
@@ -117,62 +133,32 @@ class Actions:
             tkgui.find_prev_button.configure(state="normal")
 
     @staticmethod
-    def next_result():
+    def next_result(result_list):
         """
         Функция выводит следующее значение из списка результатов поиска
-        :return: Возвращает None, если достигнут конец списка
+        :return: None
         """
-        pattern = [tkgui.find_name.get(), tkgui.find_autor.get(), tkgui.find_janr.get()]
-        with open("search.txt", "r", encoding="utf-8")as f:
-            result_list = []
-            for i in f.readlines():
-                result_list.append(json.loads(i))
+        current_pos = 0
         for i in result_list:
-            if i == pattern:
+            if i[1] == tkgui.find_name.get() and i[2] == tkgui.find_autor.get() and i[3] == tkgui.find_janr.get():
                 current_pos = result_list.index(i)
         if current_pos == len(result_list) - 1:
-            return None
-        tkgui.find_name.configure(state="normal")
-        tkgui.find_name.delete(0, END)
-        tkgui.find_name.insert(0, result_list[current_pos + 1][0])
-        tkgui.find_name.configure(state="disabled")
-        tkgui.find_autor.configure(state="normal")
-        tkgui.find_autor.delete(0, END)
-        tkgui.find_autor.insert(0, result_list[current_pos + 1][1])
-        tkgui.find_autor.configure(state="disabled")
-        tkgui.find_janr.configure(state="normal")
-        tkgui.find_janr.delete(0, END)
-        tkgui.find_janr.insert(0, result_list[current_pos + 1][2])
-        tkgui.find_janr.configure(state="disabled")
+            return
+        Actions.result_print(result_list, current_pos + 1)
 
     @staticmethod
-    def prev_result():
+    def prev_result(result_list):
         """
         Функция выводит предыдущее значение из списка результатов поиска
-        :return: Возвращает None, если достигнуто начало списка
+        :return: None
         """
-        pattern = [tkgui.find_name.get(), tkgui.find_autor.get(), tkgui.find_janr.get()]
-        with open("search.txt", "r", encoding="utf-8")as f:
-            result_list = []
-            for i in f.readlines():
-                result_list.append(json.loads(i))
+        current_pos = 0
         for i in result_list:
-            if i == pattern:
+            if i[1] == tkgui.find_name.get() and i[2] == tkgui.find_autor.get() and i[3] == tkgui.find_janr.get():
                 current_pos = result_list.index(i)
         if current_pos == 0:
-            return None
-        tkgui.find_name.configure(state="normal")
-        tkgui.find_name.delete(0, END)
-        tkgui.find_name.insert(0, result_list[current_pos-1][0])
-        tkgui.find_name.configure(state="disabled")
-        tkgui.find_autor.configure(state="normal")
-        tkgui.find_autor.delete(0, END)
-        tkgui.find_autor.insert(0, result_list[current_pos-1][1])
-        tkgui.find_autor.configure(state="disabled")
-        tkgui.find_janr.configure(state="normal")
-        tkgui.find_janr.delete(0, END)
-        tkgui.find_janr.insert(0, result_list[current_pos-1][2])
-        tkgui.find_janr.configure(state="disabled")
+            return
+        Actions.result_print(result_list, current_pos - 1)
 
     @staticmethod
     def find_clearing():
@@ -198,26 +184,21 @@ class Actions:
         tkgui.del_button.configure(state="disabled")
 
     @staticmethod
-    def del_book():
+    def del_book(result_list):
         """
         Функция удаляет книгу, которая выведена в текущий момент в поисковых
-        полях, из файла "library.lib"
-        :return: Возвращает None, если поле с наименованием книги пустое
+        полях, из базы данных
+        :return: None
         """
-        if not tkgui.find_name.get():
-            return None
-        del_list = []
-        with open("library.lib", "r", encoding="utf-8") as f:
-            for i in f.readlines():
-                del_list.append(json.loads(i))
-        for i in del_list:
-            if i == [tkgui.find_name.get(), tkgui.find_autor.get(), tkgui.find_janr.get()]:
-                del_index = del_list.index(i)
-        del_list.pop(del_index)
-        with open("library.lib", "w", encoding="utf-8") as f:
-            for i in del_list:
-                json.dump(i, f, ensure_ascii=False)
-                f.write("\n")
+        del_book_id = 0
+        for i in result_list:
+            if i[1] == tkgui.find_name.get() and i[2] == tkgui.find_autor.get() and i[3] == tkgui.find_janr.get():
+                del_book_id = i[0]
+        con = Connection.connect()
+        with con:
+            cur = con.cursor()
+            cur.execute(f"DELETE FROM books WHERE idbooks = '{del_book_id}';")
+            con.commit()
         messagebox.showinfo("Успех!", "Книга удалена из базы!")
         Actions.find_clearing()
 
@@ -260,9 +241,9 @@ class Actions:
     def save_config(self):
         pass
 
+
 class TkGUI:
     def __init__(self):
-
         # ---------------- отрисовка основного окна--------------------
         self.root = Tk()
         self.root.title("Библиотека")
@@ -344,22 +325,25 @@ class TkGUI:
         self.find_janr = Entry(self.find_tab, width="40", state="disabled")
         self.find_janr.grid(column=1, row=8, padx=0)
 
-        self.find_prev_button = Button(self.find_tab, text="<<<", command=Actions.prev_result, state="disabled")
+        self.find_prev_button = Button(self.find_tab, text="<<<", command=self.prev_result, state="disabled")
         self.find_prev_button.grid(column=0, row=9, pady=10)
 
-        self.find_button = Button(self.find_tab, text="Искать", command=Actions.find_book)
+        self.find_button = Button(self.find_tab, text="Искать", command=self.search)
         self.find_button.grid(column=1, row=9, pady=10)
 
-        self.find_next_button = Button(self.find_tab, text=">>>", command=Actions.next_result, state="disabled")
+        self.find_next_button = Button(self.find_tab, text=">>>", command=self.next_result, state="disabled")
         self.find_next_button.grid(column=2, row=9, pady=10)
 
-        self.change_button = Button(self.find_tab, text="    Изменить данные    ", command=Actions.change_book, state="disabled")
+        self.change_button = Button(self.find_tab, text="    Изменить данные    ", command=Actions.change_book,
+                                    state="disabled")
         self.change_button.grid(column=2, row=6)
 
-        self.save_button = Button(self.find_tab, text="Сохранить изменения", command=Actions.save_book, state="disabled")
+        self.save_button = Button(self.find_tab, text="Сохранить изменения", command=Actions.save_book,
+                                  state="disabled")
         self.save_button.grid(column=2, row=7)
 
-        self.del_button = Button(self.find_tab, text="Удалить книгу из базы", command=Actions.del_book, state="disabled")
+        self.del_button = Button(self.find_tab, text="Удалить книгу из базы", command=self.delete_book,
+                                 state="disabled")
         self.del_button.grid(column=2, row=8)
 
         # ---------------- Заполение вкладки "Настройки"--------------------
@@ -370,22 +354,25 @@ class TkGUI:
         self.login_DB_string = Label(self.config_tab, text="Логин:")
         self.login_DB_string.grid(column=0, row=1, padx=10, pady=5, sticky=E)
 
-        self.login_DB_entry = Entry(self.config_tab, width="10", state="normal")
+        self.login_DB_entry = Entry(self.config_tab, width="10", state="normal", text="Ravenom")
         self.login_DB_entry.grid(column=1, row=1, padx=10, sticky=W)
+        self.login_DB_entry.insert(0, "Ravenom")
 
         self.password_DB_string = Label(self.config_tab, text="Пароль:")
         self.password_DB_string.grid(column=2, row=1, padx=10, pady=5, sticky=W)
 
         self.password_DB_entry = Entry(self.config_tab, width="10", state="normal")
         self.password_DB_entry.grid(column=3, row=1, padx=10, sticky=W)
+        self.password_DB_entry.insert(0, "Ravenom01")
 
         self.name_DB_string = Label(self.config_tab, text="Имя БД:")
         self.name_DB_string.grid(column=4, row=1, padx=10, pady=5, sticky=W)
 
         self.name_DB_entry = Entry(self.config_tab, width="10", state="normal")
         self.name_DB_entry.grid(column=5, row=1, padx=10, sticky=W)
+        self.name_DB_entry.insert(0, "Bookshelf")
 
-        self.save_conf_button = Button(self.config_tab, text="Сохранить", command=self.save_config, state="normal")
+        self.save_conf_button = Button(self.config_tab, text="Подключиться", command=Connection.connect, state="normal")
         self.save_conf_button.grid(column=1, row=2)
 
         # ---------------- Заполение данных "Насторойки выгрузки"--------------------
@@ -402,16 +389,26 @@ class TkGUI:
         self.rad2.grid(column=2, row=3)
         self.rad3.grid(column=3, row=3)
 
+        self.result = None
 
     def main(self):
         self.root.mainloop()
 
     def search(self):
-        if self.checkbox == 1:
-            field = self.find_usl.text
+        self.result = Actions.find_book()
 
     def save_config(self):
         pass
+
+    def next_result(self):
+        Actions.next_result(self.result)
+
+    def prev_result(self):
+        Actions.prev_result(self.result)
+
+    def delete_book(self):
+        Actions.del_book(self.result)
+
 
 if __name__ == '__main__':
     tkgui = TkGUI()
