@@ -13,6 +13,9 @@ class Book:
         self.author = author
         self.janr = janr
 
+    def __str__(self):
+        return f"({self.name}, {self.author}, {self.janr})"
+
 
 class Connection:
     @staticmethod
@@ -136,14 +139,18 @@ class Actions:
             con = Connection.connect()
             with con:
                 cur = con.cursor()
-                cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
-                             VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
-                con.commit()
+                cur.execute("SELECT name, author, janr FROM `bookshelf`.`books`")
+                books = cur.fetchall()
+                if (tkgui.add_name.get(), tkgui.add_autor.get(), tkgui.add_janr.get()) not in books:
+                    cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                                VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                    con.commit()
+                    messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
+                    Actions.add_clearing()
+                else:
+                    messagebox.showinfo("Ошибка!", "Книга уже есть в базе!")
         else:
             messagebox.showinfo("Ошибка!", "Заполните все данные по книге!")
-            return
-        messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
-        Actions.add_clearing()
 
     @staticmethod
     def add_clearing():
