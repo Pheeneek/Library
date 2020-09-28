@@ -5,6 +5,7 @@ from tkinter import ttk
 from tkinter import messagebox
 import json
 import csv
+import logging
 
 
 class Book:
@@ -14,7 +15,7 @@ class Book:
         self.janr = janr
 
     def __str__(self):
-        return f"({self.name}, {self.author}, {self.janr})"
+        return f"('{self.name}', '{self.author}', '{self.janr}')"
 
 
 class Connection:
@@ -23,10 +24,10 @@ class Connection:
         try:
             con = pymysql.connect('localhost', f'{tkgui.login_DB_entry.get()}',
                                   f'{tkgui.password_DB_entry.get()}', f'{tkgui.name_DB_entry.get()}')
-            print(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
+            logging.info(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
             return con
         except pymysql.err.OperationalError:
-            print("Не удалось подключиться к базе данных!")
+            logging.warning("Ошибка добавления! Книга уже есть в базе!")
 
 
 class JsonDriverBuilder:
@@ -48,8 +49,11 @@ class JsonDriverBuilder:
                 cur = con.cursor()
                 for i in data:
                     new_book = Book(i[1], i[2], i[3])
-                    cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
-                                    VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                    if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
+                        cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                                        VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                    else:
+                        logging.warning("Ошибка добавления! Книга уже есть в базе!")
                 con.commit()
 
 
@@ -75,8 +79,10 @@ class CSVDriverBuilder:
                 for i in file_reader:
                     if i:
                         new_book = Book(i[1], i[2], i[3])
-                        cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
-                                        VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                        if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
+                            cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                                            VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                            logging.warning("Ошибка добавления! Книга уже есть в базе!")
                 con.commit()
 
 
@@ -104,8 +110,11 @@ class TxtDriverBuilder:
                 cur = con.cursor()
                 for i in data:
                     new_book = Book(i[1], i[2], i[3])
-                    cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
-                                    VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                    if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
+                        cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                                        VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                    else:
+                        logging.warning("Ошибка добавления! Книга уже есть в базе!")
                 con.commit()
 
 
@@ -139,9 +148,7 @@ class Actions:
             con = Connection.connect()
             with con:
                 cur = con.cursor()
-                cur.execute("SELECT name, author, janr FROM `bookshelf`.`books`")
-                books = cur.fetchall()
-                if (tkgui.add_name.get(), tkgui.add_autor.get(), tkgui.add_janr.get()) not in books:
+                if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
                     cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
                                 VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
                     con.commit()
@@ -151,6 +158,16 @@ class Actions:
                     messagebox.showinfo("Ошибка!", "Книга уже есть в базе!")
         else:
             messagebox.showinfo("Ошибка!", "Заполните все данные по книге!")
+
+    @staticmethod
+    def search_for_book(book):
+        con = Connection.connect()
+        with con:
+            cur = con.cursor()
+            cur.execute("SELECT name, author, janr FROM `bookshelf`.`books`")
+            books = cur.fetchall()
+            if book not in books:
+                return True
 
     @staticmethod
     def add_clearing():
@@ -535,18 +552,23 @@ class TkGUI:
             if tkgui.find_var.get() == 1:
                 cur.execute(f"SELECT * FROM `bookshelf`.`books`;")
             self.data = list(cur.fetchall())
-        self.save_driver = SaveLoad(self.data, self.file_entry.get())
-        self.save_driver.write()
+        if self.file_entry.get():
+            self.save_driver = SaveLoad(self.data, self.file_entry.get())
+            self.save_driver.write()
+        else:
+            logging.warning("Не выбрано имя файла!")
 
     def load_file(self):
-        self.save_driver = SaveLoad(self.data, self.file_entry.get())
-        self.save_driver.read()
+        if self.file_entry.get():
+            self.save_driver = SaveLoad(self.data, self.file_entry.get())
+            self.save_driver.read()
+        else:
+            logging.warning("Не выбрано имя файла!")
 
     @staticmethod
     def verify_path(path):
         counter = len(path)
         while counter > 0:
-            print(path[-1], type(path[-1]))
             if path[-1] == "/" or path[-1] == "\\":
                 path = path[:-1]
                 break
@@ -555,9 +577,9 @@ class TkGUI:
                 counter -= 1
         if len(path) and not os.path.exists(path):
             os.makedirs(path)
-        print(path)
 
 
 if __name__ == '__main__':
+    # logging.basicConfig(filename="log", level="WARNING")
     tkgui = TkGUI()
     tkgui.main()
