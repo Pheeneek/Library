@@ -6,6 +6,7 @@ from tkinter import messagebox
 import json
 import csv
 import logging
+import sqlite3
 
 
 class Book:
@@ -21,13 +22,21 @@ class Book:
 class Connection:
     @staticmethod
     def connect():
-        try:
-            con = pymysql.connect('localhost', f'{tkgui.login_DB_entry.get()}',
-                                  f'{tkgui.password_DB_entry.get()}', f'{tkgui.name_DB_entry.get()}')
-            logging.info(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
+        if tkgui.bd_choice_var.get() == 2:
+            con = sqlite3.connect(tkgui.name_DB_entry.get())
+            cur = con.cursor()
+            cur.execute("CREATE TABLE IF NOT EXISTS books (`idbooks` INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        "`name` VARCHAR(45), `author` VARCHAR(45), `janr` VARCHAR(45));")
+            con.commit()
             return con
-        except pymysql.err.OperationalError:
-            logging.warning("Ошибка добавления! Книга уже есть в базе!")
+        else:
+            try:
+                con = pymysql.connect('localhost', f'{tkgui.login_DB_entry.get()}',
+                                      f'{tkgui.password_DB_entry.get()}', f'{tkgui.name_DB_entry.get()}')
+                logging.warning(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
+                return con
+            except pymysql.err.OperationalError or pymysql.err.InternalError:
+                logging.warning("Ошибка подключения к базе данных!!!")
 
 
 class JsonDriverBuilder:
@@ -50,7 +59,7 @@ class JsonDriverBuilder:
                 for i in data:
                     new_book = Book(i[1], i[2], i[3])
                     if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                        cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                        cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
                                         VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
                     else:
                         logging.warning("Ошибка добавления! Книга уже есть в базе!")
@@ -80,7 +89,7 @@ class CSVDriverBuilder:
                     if i:
                         new_book = Book(i[1], i[2], i[3])
                         if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                            cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                            cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
                                             VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
                             logging.warning("Ошибка добавления! Книга уже есть в базе!")
                 con.commit()
@@ -111,7 +120,7 @@ class TxtDriverBuilder:
                 for i in data:
                     new_book = Book(i[1], i[2], i[3])
                     if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                        cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                        cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
                                         VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
                     else:
                         logging.warning("Ошибка добавления! Книга уже есть в базе!")
@@ -149,7 +158,7 @@ class Actions:
             with con:
                 cur = con.cursor()
                 if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                    cur.execute(f"INSERT INTO `bookshelf`.`books` (`name`, `author`, `janr`)\
+                    cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
                                 VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
                     con.commit()
                     messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
@@ -164,7 +173,7 @@ class Actions:
         con = Connection.connect()
         with con:
             cur = con.cursor()
-            cur.execute("SELECT name, author, janr FROM `bookshelf`.`books`")
+            cur.execute("SELECT name, author, janr FROM `books`")
             books = cur.fetchall()
             if book not in books:
                 return True
@@ -192,11 +201,11 @@ class Actions:
         with con:
             cur = con.cursor()
             if tkgui.find_var.get() == 1:
-                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE name LIKE '%{pattern}%';")
+                cur.execute(f"SELECT * FROM `books` WHERE name LIKE '%{pattern}%';")
             elif tkgui.find_var.get() == 2:
-                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE author LIKE '%{pattern}%';")
+                cur.execute(f"SELECT * FROM `books` WHERE author LIKE '%{pattern}%';")
             else:
-                cur.execute(f"SELECT * FROM `bookshelf`.`books` WHERE janr LIKE '%{pattern}%';")
+                cur.execute(f"SELECT * FROM `books` WHERE janr LIKE '%{pattern}%';")
             result = list(cur.fetchall())
         return result
 
@@ -326,7 +335,7 @@ class Actions:
         con = Connection.connect()
         with con:
             cur = con.cursor()
-            cur.execute(f"UPDATE bookshelf.books \
+            cur.execute(f"UPDATE books \
             SET name = '{tkgui.find_name.get()}', \
             author = '{tkgui.find_autor.get()}', \
             janr = '{tkgui.find_janr.get()}' \
@@ -466,6 +475,13 @@ class TkGUI:
         self.config_DB_string = Label(self.config_tab, text="Настройки БД:")
         self.config_DB_string.grid(column=0, row=0, padx=10, pady=10, sticky=W)
 
+        self.bd_choice_var = IntVar()
+        self.bd_choice_var.set(1)
+        self.bd_choice1 = ttk.Radiobutton(self.config_tab, text='MySQL', variable=self.bd_choice_var, value=1)
+        self.bd_choice2 = ttk.Radiobutton(self.config_tab, text='SQLite3', variable=self.bd_choice_var, value=2)
+        self.bd_choice1.grid(column=1, row=0)
+        self.bd_choice2.grid(column=2, row=0)
+
         self.login_DB_string = Label(self.config_tab, text="Логин:")
         self.login_DB_string.grid(column=0, row=1, padx=10, pady=5, sticky=E)
 
@@ -550,7 +566,7 @@ class TkGUI:
         with con:
             cur = con.cursor()
             if tkgui.find_var.get() == 1:
-                cur.execute(f"SELECT * FROM `bookshelf`.`books`;")
+                cur.execute(f"SELECT * FROM `books`;")
             self.data = list(cur.fetchall())
         if self.file_entry.get():
             self.save_driver = SaveLoad(self.data, self.file_entry.get())
