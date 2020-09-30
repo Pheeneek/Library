@@ -22,12 +22,17 @@ class Book:
 class Connection:
     @staticmethod
     def connect():
+        """
+        Проверяет выбор пользователя, какую БД использовать и создает подключение.
+        :return: con - подключение к БД
+        """
         if tkgui.bd_choice_var.get() == 2:
             con = sqlite3.connect(tkgui.name_DB_entry.get())
             cur = con.cursor()
             cur.execute("CREATE TABLE IF NOT EXISTS books (`idbooks` INTEGER PRIMARY KEY AUTOINCREMENT,"
                         "`name` VARCHAR(45), `author` VARCHAR(45), `janr` VARCHAR(45));")
             con.commit()
+            logging.warning(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
             return con
         else:
             try:
@@ -47,10 +52,20 @@ class JsonDriverBuilder:
         self.filename = filename
 
     def write(self, data):
+        """
+        Функция записывает данные из текущей базу данных в файл в формате json
+        :param data: список книг
+        :return: None
+        """
         with open(self.filename, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
 
     def read(self):
+        """
+        Загружает в базу данных книги из файла формата json, в случае наличия книги
+        в базе выдает предупреждение
+        :return: None
+        """
         with open(self.filename, "r", encoding="utf-8") as f:
             data = json.load(f)
             con = Connection.connect()
@@ -74,12 +89,22 @@ class CSVDriverBuilder:
         self.filename = filename
 
     def write(self, data):
+        """
+        Функция записывает данные из текущей базу данных в файл в формате csv
+        :param data: список книг
+        :return: None
+        """
         with open(self.filename, "w", encoding="utf-8") as f:
             writer = csv.writer(f)
             for i in data:
                 writer.writerow(i)
 
     def read(self):
+        """
+        Загружает в базу данных книги из файла формата csv, в случае наличия книги
+        в базе выдает предупреждение
+        :return: None
+        """
         with open(self.filename, "r", encoding="utf-8") as f:
             file_reader = csv.reader(f, delimiter=",")
             con = Connection.connect()
@@ -103,12 +128,22 @@ class TxtDriverBuilder:
         self.filename = filename
 
     def write(self, data):
+        """
+        Функция записывает данные из текущей базу данных в файл в формате txt
+        :param data: список книг
+        :return: None
+        """
         with open(self.filename, "w", encoding="utf-8") as f:
             for i in data:
                 json.dump(i, f, ensure_ascii=False)
                 f.write("\n")
 
     def read(self):
+        """
+        Загружает в базу данных книги из файла формата txt, в случае наличия книги
+        в базе выдает предупреждение
+        :return: None
+        """
         with open(self.filename, "r", encoding="utf-8") as f:
             data = []
             for i in f.readlines():
@@ -170,6 +205,11 @@ class Actions:
 
     @staticmethod
     def search_for_book(book):
+        """
+        Проверяет наличие книги в БД
+        :param book: список с данными книги
+        :return: True, если книги нет в БД
+        """
         con = Connection.connect()
         with con:
             cur = con.cursor()
@@ -191,10 +231,8 @@ class Actions:
     @staticmethod
     def finder():
         """
-        Функция получает длину списка книг, считывает условия поиска
-        и осуществляет поиск в списке книг по паттерну
-        :param
-        :return: result - список книг, удовлетворяющих условию поиска
+        Ищет книги в БД по паттерну
+        :return: result - список с книгами, найденными по паттерну
         """
         pattern = tkgui.find_usl.get()
         con = Connection.connect()
@@ -213,10 +251,9 @@ class Actions:
     def find_book():
         """
         Функция сбрасывает результаты предыдущего поиска,
-        считает длину списка книг в библиотеке, передает ее в
-        функцию finder(), получает список с результатами,
-        записывает результаты поиска в файл "search.txt"
-        :return: result
+        запускает функцию finder(), получает список с результатами,
+        запускает функцию вывода первого результата
+        :return: result - список с результатами поиска
         """
         Actions.find_clearing()
         result = Actions.finder()
@@ -226,12 +263,10 @@ class Actions:
     @staticmethod
     def result_print(result, index=0):
         """
-        Функция выводит первое значение из списка результатов поиска,
-        если он не пустой. После этого, если в списке больше 1 значения,
-        активирует кнопки листинга.
-        :param index: индекс выводимого элемента из списка результатов
-        :param result: список книг, удовлетворяющий условиям поиска
-        :return: None
+        Выводит книгу из списка результатов поиска по параметру index
+        :param result: список результатов поиска
+        :param index: индекс выводимой книги
+        :return: порядковый номер книги в БД
         """
         tkgui.find_message.configure(text=f"Результат поиска: {index + 1 if len(result) != 0 else 0} из {len(result)}")
         if result:
@@ -258,7 +293,8 @@ class Actions:
     def next_result(result_list):
         """
         Функция выводит следующее значение из списка результатов поиска
-        :return: None
+        :param result_list: список с результатами поиска
+        :return: порядковый номер книги в БД
         """
         current_pos = 0
         for i in result_list:
@@ -273,7 +309,8 @@ class Actions:
     def prev_result(result_list):
         """
         Функция выводит предыдущее значение из списка результатов поиска
-        :return: None
+        :param result_list: список с результатами поиска
+        :return: порядковый номер книги в БД
         """
         current_pos = 0
         for i in result_list:
@@ -289,7 +326,7 @@ class Actions:
         """
         Функция очищает поля и сбрасывает состояние кнопок
         на вкладке "Поиск книги"
-        :return:
+        :return: None
         """
         tkgui.find_name.configure(state="normal")
         tkgui.find_name.delete(0, END)
@@ -312,6 +349,7 @@ class Actions:
         """
         Функция удаляет книгу, которая выведена в текущий момент в поисковых
         полях, из базы данных
+        :param result_list: список с результатами поиска
         :return: None
         """
         del_book_id = 0
@@ -329,8 +367,9 @@ class Actions:
     @staticmethod
     def save_book(book_id):
         """
-        Функция сохраняет введенные изменения по книге в библиотеку
-        :return:
+        Функция сохраняет введенные изменения по книге в БД
+        :param book_id: Порядковый номер книги в БД
+        :return: None
         """
         con = Connection.connect()
         with con:
@@ -348,7 +387,8 @@ class Actions:
     def change_book(book_id):
         """
         Функция кнопки "Внести изменения". Делает доступными соответствубщие кнопки и поля
-        :return:
+        :param book_id: Порядковый номер книги в БД
+        :return: book_id - Порядковый номер книги в БД
         """
         tkgui.change_button.configure(state="disabled")
         Actions.change_config()
@@ -356,6 +396,10 @@ class Actions:
 
     @staticmethod
     def change_config():
+        """
+        Делает доступными соответствубщие кнопки и поля
+        :return: None
+        """
         tkgui.find_name.configure(state="normal")
         tkgui.find_autor.configure(state="normal")
         tkgui.find_janr.configure(state="normal")
@@ -363,9 +407,6 @@ class Actions:
         tkgui.find_next_button.configure(state="disabled")
         tkgui.find_prev_button.configure(state="disabled")
         tkgui.save_button.configure(state="normal")
-
-    def save_config(self):
-        pass
 
 
 class TkGUI:
@@ -539,28 +580,60 @@ class TkGUI:
         self.data = None
 
     def main(self):
+        """
+        Запускает основное окно (цикл)
+        :return: None
+        """
         self.root.mainloop()
 
     def search(self):
+        """
+        Функция кнопки поиска
+        :return: None
+        """
         self.result = Actions.find_book()
         self.book_id = self.result[0][0]
 
     def next_result(self):
+        """
+        Функция кнопки следующий результат
+        :return: None
+        """
         self.book_id = Actions.next_result(self.result)
 
     def prev_result(self):
+        """
+        Функция кнопки предыдущий результат
+        :return: None
+        """
         self.book_id = Actions.prev_result(self.result)
 
     def delete_book(self):
+        """
+        Функция кнопки удалить книгу
+        :return: None
+        """
         Actions.del_book(self.result)
 
     def change_book(self):
+        """
+        Функция кнопки изменить книгу
+        :return: None
+        """
         Actions.change_book(self.book_id)
 
     def save_book(self):
+        """
+        Функция кнопки сохранить изменения
+        :return: None
+        """
         Actions.save_book(self.book_id)
 
     def save_file(self):
+        """
+        Функция кнопки выгрузить книги в файл
+        :return: None
+        """
         TkGUI.verify_path(self.file_entry.get())
         con = Connection.connect()
         with con:
@@ -575,6 +648,10 @@ class TkGUI:
             logging.warning("Не выбрано имя файла!")
 
     def load_file(self):
+        """
+        Функция кнопки загрузить книги из файла
+        :return: None
+        """
         if self.file_entry.get():
             self.save_driver = SaveLoad(self.data, self.file_entry.get())
             self.save_driver.read()
@@ -583,6 +660,11 @@ class TkGUI:
 
     @staticmethod
     def verify_path(path):
+        """
+        Функция проверяет наличие пути, если отсутствует - создает его
+        :param path: путь, указанный пользователем
+        :return: None
+        """
         counter = len(path)
         while counter > 0:
             if path[-1] == "/" or path[-1] == "\\":
@@ -596,6 +678,5 @@ class TkGUI:
 
 
 if __name__ == '__main__':
-    # logging.basicConfig(filename="log", level="WARNING")
     tkgui = TkGUI()
     tkgui.main()
