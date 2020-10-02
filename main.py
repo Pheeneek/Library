@@ -1,12 +1,11 @@
-import pymysql
 import os
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
-import json
-import csv
 import logging
-import sqlite3
+
+from connection import Connection
+from Drivers import SaveLoad, Search
 
 
 class Book:
@@ -19,278 +18,78 @@ class Book:
         return f"('{self.name}', '{self.author}', '{self.janr}')"
 
 
-class Connection:
-    @staticmethod
-    def connect():
-        """
-        Проверяет выбор пользователя, какую БД использовать и создает подключение.
-        :return: con - подключение к БД
-        """
-        if tkgui.bd_choice_var.get() == 2:
-            con = sqlite3.connect(tkgui.name_DB_entry.get())
-            cur = con.cursor()
-            cur.execute("CREATE TABLE IF NOT EXISTS books (`idbooks` INTEGER PRIMARY KEY AUTOINCREMENT,"
-                        "`name` VARCHAR(45), `author` VARCHAR(45), `janr` VARCHAR(45));")
-            con.commit()
-            logging.warning(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
-            return con
-        else:
-            try:
-                con = pymysql.connect('localhost', f'{tkgui.login_DB_entry.get()}',
-                                      f'{tkgui.password_DB_entry.get()}', f'{tkgui.name_DB_entry.get()}')
-                logging.warning(f"Успешное подключение к базе данных '{tkgui.name_DB_entry.get()}'!")
-                return con
-            except pymysql.err.OperationalError or pymysql.err.InternalError:
-                logging.warning("Ошибка подключения к базе данных!!!")
-
-
-class JsonDriverBuilder:
-    def __init__(self, filename):
-        filename = filename.strip()
-        if not str(filename).endswith(".json"):
-            filename = filename + ".json"
-        self.filename = filename
-
-    def write(self, data):
-        """
-        Функция записывает данные из текущей базу данных в файл в формате json
-        :param data: список книг
-        :return: None
-        """
-        with open(self.filename, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-
-    def read(self):
-        """
-        Загружает в базу данных книги из файла формата json, в случае наличия книги
-        в базе выдает предупреждение
-        :return: None
-        """
-        with open(self.filename, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            con = Connection.connect()
-            with con:
-                cur = con.cursor()
-                for i in data:
-                    new_book = Book(i[1], i[2], i[3])
-                    if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                        cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
-                                        VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
-                    else:
-                        logging.warning("Ошибка добавления! Книга уже есть в базе!")
-                con.commit()
-
-
-class CSVDriverBuilder:
-    def __init__(self, filename):
-        filename = filename.strip()
-        if not filename.endswith(".csv"):
-            filename = filename + ".scv"
-        self.filename = filename
-
-    def write(self, data):
-        """
-        Функция записывает данные из текущей базу данных в файл в формате csv
-        :param data: список книг
-        :return: None
-        """
-        with open(self.filename, "w", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            for i in data:
-                writer.writerow(i)
-
-    def read(self):
-        """
-        Загружает в базу данных книги из файла формата csv, в случае наличия книги
-        в базе выдает предупреждение
-        :return: None
-        """
-        with open(self.filename, "r", encoding="utf-8") as f:
-            file_reader = csv.reader(f, delimiter=",")
-            con = Connection.connect()
-            with con:
-                cur = con.cursor()
-                for i in file_reader:
-                    if i:
-                        new_book = Book(i[1], i[2], i[3])
-                        if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                            cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
-                                            VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
-                            logging.warning("Ошибка добавления! Книга уже есть в базе!")
-                con.commit()
-
-
-class TxtDriverBuilder:
-    def __init__(self, filename):
-        filename = filename.strip()
-        if not str(filename).endswith(".txt"):
-            filename = filename + ".txt"
-        self.filename = filename
-
-    def write(self, data):
-        """
-        Функция записывает данные из текущей базу данных в файл в формате txt
-        :param data: список книг
-        :return: None
-        """
-        with open(self.filename, "w", encoding="utf-8") as f:
-            for i in data:
-                json.dump(i, f, ensure_ascii=False)
-                f.write("\n")
-
-    def read(self):
-        """
-        Загружает в базу данных книги из файла формата txt, в случае наличия книги
-        в базе выдает предупреждение
-        :return: None
-        """
-        with open(self.filename, "r", encoding="utf-8") as f:
-            data = []
-            for i in f.readlines():
-                if len(i) > 1:
-                    data.append(json.loads(i[:-1]))
-            con = Connection.connect()
-            with con:
-                cur = con.cursor()
-                for i in data:
-                    new_book = Book(i[1], i[2], i[3])
-                    if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                        cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
-                                        VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
-                    else:
-                        logging.warning("Ошибка добавления! Книга уже есть в базе!")
-                con.commit()
-
-
-class SaveLoad:
-    def __init__(self, data, filename):
-        if tkgui.writer_var.get() == 1:
-            self.driver = JsonDriverBuilder(filename)
-        elif tkgui.writer_var.get() == 2:
-            self.driver = CSVDriverBuilder(filename)
-        elif tkgui.writer_var.get() == 3:
-            self.driver = TxtDriverBuilder(filename)
-        self.data = data
-
-    def write(self):
-        self.driver.write(self.data)
-
-    def read(self):
-        return self.driver.read()
-
-
 class Actions:
-    @staticmethod
-    def add_book():
-        """
-        Функция проверяет введенные пользователем данные и,
-        в случае корректности, записывает их в базу данных
-        :return: None
-        """
-        if tkgui.add_name.get() and tkgui.add_autor.get() and tkgui.add_janr.get():
-            new_book = Book(tkgui.add_name.get(), tkgui.add_autor.get(), tkgui.add_janr.get())
-            con = Connection.connect()
-            with con:
-                cur = con.cursor()
-                if Actions.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}')):
-                    cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
-                                VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
-                    con.commit()
-                    messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
-                    Actions.add_clearing()
-                else:
-                    messagebox.showinfo("Ошибка!", "Книга уже есть в базе!")
-        else:
-            messagebox.showinfo("Ошибка!", "Заполните все данные по книге!")
+    def __init__(self, tkgui):
+        self.tkgui = tkgui
 
-    @staticmethod
-    def search_for_book(book):
-        """
-        Проверяет наличие книги в БД
-        :param book: список с данными книги
-        :return: True, если книги нет в БД
-        """
-        con = Connection.connect()
-        with con:
-            cur = con.cursor()
-            cur.execute("SELECT name, author, janr FROM `books`")
-            books = cur.fetchall()
-            if book not in books:
-                return True
-
-    @staticmethod
-    def add_clearing():
+    def add_clearing(self):
         """
         Функция очищает поля вкладки "Добавление книги"
         :return: None
         """
-        tkgui.add_name.delete(0, END)
-        tkgui.add_autor.delete(0, END)
-        tkgui.add_janr.delete(0, END)
+        self.tkgui.add_name.delete(0, END)
+        self.tkgui.add_autor.delete(0, END)
+        self.tkgui.add_janr.delete(0, END)
 
-    @staticmethod
-    def finder():
+    def finder(self):
         """
         Ищет книги в БД по паттерну
         :return: result - список с книгами, найденными по паттерну
         """
         pattern = tkgui.find_usl.get()
-        con = Connection.connect()
+        con = self.tkgui.getconnect()
         with con:
             cur = con.cursor()
-            if tkgui.find_var.get() == 1:
+            if self.tkgui.find_var.get() == 1:
                 cur.execute(f"SELECT * FROM `books` WHERE name LIKE '%{pattern}%';")
-            elif tkgui.find_var.get() == 2:
+            elif self.tkgui.find_var.get() == 2:
                 cur.execute(f"SELECT * FROM `books` WHERE author LIKE '%{pattern}%';")
             else:
                 cur.execute(f"SELECT * FROM `books` WHERE janr LIKE '%{pattern}%';")
             result = list(cur.fetchall())
         return result
 
-    @staticmethod
-    def find_book():
+    def find_book(self):
         """
         Функция сбрасывает результаты предыдущего поиска,
         запускает функцию finder(), получает список с результатами,
         запускает функцию вывода первого результата
         :return: result - список с результатами поиска
         """
-        Actions.find_clearing()
-        result = Actions.finder()
-        Actions.result_print(result)
+        self.find_clearing()
+        result = self.finder()
+        self.result_print(result)
         return result
 
-    @staticmethod
-    def result_print(result, index=0):
+    def result_print(self, result, index=0):
         """
         Выводит книгу из списка результатов поиска по параметру index
         :param result: список результатов поиска
         :param index: индекс выводимой книги
         :return: порядковый номер книги в БД
         """
-        tkgui.find_message.configure(text=f"Результат поиска: {index + 1 if len(result) != 0 else 0} из {len(result)}")
+        self.tkgui.find_message.configure(text=f"Результат поиска: {index + 1 if len(result) != 0 else 0} из {len(result)}")
         if result:
-            tkgui.find_name.configure(state="normal")
-            tkgui.find_name.delete(0, END)
-            tkgui.find_name.insert(0, result[index][1])
-            tkgui.find_name.configure(state="disabled")
-            tkgui.find_autor.configure(state="normal")
-            tkgui.find_autor.delete(0, END)
-            tkgui.find_autor.insert(0, result[index][2])
-            tkgui.find_autor.configure(state="disabled")
-            tkgui.find_janr.configure(state="normal")
-            tkgui.find_janr.delete(0, END)
-            tkgui.find_janr.insert(0, result[index][3])
-            tkgui.find_janr.configure(state="disabled")
-            tkgui.change_button.configure(state="normal")
-            tkgui.del_button.configure(state="normal")
+            self.tkgui.find_name.configure(state="normal")
+            self.tkgui.find_name.delete(0, END)
+            self.tkgui.find_name.insert(0, result[index][1])
+            self.tkgui.find_name.configure(state="disabled")
+            self.tkgui.find_autor.configure(state="normal")
+            self.tkgui.find_autor.delete(0, END)
+            self.tkgui.find_autor.insert(0, result[index][2])
+            self.tkgui.find_autor.configure(state="disabled")
+            self.tkgui.find_janr.configure(state="normal")
+            self.tkgui.find_janr.delete(0, END)
+            self.tkgui.find_janr.insert(0, result[index][3])
+            self.tkgui.find_janr.configure(state="disabled")
+            self.tkgui.change_button.configure(state="normal")
+            self.tkgui.del_button.configure(state="normal")
         if len(result) > 1:
-            tkgui.find_next_button.configure(state="normal")
-            tkgui.find_prev_button.configure(state="normal")
+            self.tkgui.find_next_button.configure(state="normal")
+            self.tkgui.find_prev_button.configure(state="normal")
         return result[index][0]
 
-    @staticmethod
-    def next_result(result_list):
+    def next_result(self, result_list):
         """
         Функция выводит следующее значение из списка результатов поиска
         :param result_list: список с результатами поиска
@@ -298,15 +97,14 @@ class Actions:
         """
         current_pos = 0
         for i in result_list:
-            if i[1] == tkgui.find_name.get() and i[2] == tkgui.find_autor.get() and i[3] == tkgui.find_janr.get():
+            if i[1] == self.tkgui.find_name.get() and i[2] == self.tkgui.find_autor.get() and i[3] == self.tkgui.find_janr.get():
                 current_pos = result_list.index(i)
         if current_pos == len(result_list) - 1:
             return
-        book_id = Actions.result_print(result_list, current_pos + 1)
+        book_id = self.result_print(result_list, current_pos + 1)
         return book_id
 
-    @staticmethod
-    def prev_result(result_list):
+    def prev_result(self, result_list):
         """
         Функция выводит предыдущее значение из списка результатов поиска
         :param result_list: список с результатами поиска
@@ -314,38 +112,36 @@ class Actions:
         """
         current_pos = 0
         for i in result_list:
-            if i[1] == tkgui.find_name.get() and i[2] == tkgui.find_autor.get() and i[3] == tkgui.find_janr.get():
+            if i[1] == self.tkgui.find_name.get() and i[2] == self.tkgui.find_autor.get() and i[3] == self.tkgui.find_janr.get():
                 current_pos = result_list.index(i)
         if current_pos == 0:
             return
-        book_id = Actions.result_print(result_list, current_pos - 1)
+        book_id = self.result_print(result_list, current_pos - 1)
         return book_id
 
-    @staticmethod
-    def find_clearing():
+    def find_clearing(self):
         """
         Функция очищает поля и сбрасывает состояние кнопок
         на вкладке "Поиск книги"
         :return: None
         """
-        tkgui.find_name.configure(state="normal")
-        tkgui.find_name.delete(0, END)
-        tkgui.find_name.configure(state="disabled")
-        tkgui.find_autor.configure(state="normal")
-        tkgui.find_autor.delete(0, END)
-        tkgui.find_autor.configure(state="disabled")
-        tkgui.find_janr.configure(state="normal")
-        tkgui.find_janr.delete(0, END)
-        tkgui.find_janr.configure(state="disabled")
-        tkgui.find_next_button.configure(state="disabled")
-        tkgui.find_prev_button.configure(state="disabled")
-        tkgui.find_message.configure(text="")
-        tkgui.change_button.configure(state="disabled")
-        tkgui.save_button.configure(state="disabled")
-        tkgui.del_button.configure(state="disabled")
+        self.tkgui.find_name.configure(state="normal")
+        self.tkgui.find_name.delete(0, END)
+        self.tkgui.find_name.configure(state="disabled")
+        self.tkgui.find_autor.configure(state="normal")
+        self.tkgui.find_autor.delete(0, END)
+        self.tkgui.find_autor.configure(state="disabled")
+        self.tkgui.find_janr.configure(state="normal")
+        self.tkgui.find_janr.delete(0, END)
+        self.tkgui.find_janr.configure(state="disabled")
+        self.tkgui.find_next_button.configure(state="disabled")
+        self.tkgui.find_prev_button.configure(state="disabled")
+        self.tkgui.find_message.configure(text="")
+        self.tkgui.change_button.configure(state="disabled")
+        self.tkgui.save_button.configure(state="disabled")
+        self.tkgui.del_button.configure(state="disabled")
 
-    @staticmethod
-    def del_book(result_list):
+    def del_book(self, result_list):
         """
         Функция удаляет книгу, которая выведена в текущий момент в поисковых
         полях, из базы данных
@@ -354,9 +150,9 @@ class Actions:
         """
         del_book_id = 0
         for i in result_list:
-            if i[1] == tkgui.find_name.get() and i[2] == tkgui.find_autor.get() and i[3] == tkgui.find_janr.get():
+            if i[1] == self.tkgui.find_name.get() and i[2] == self.tkgui.find_autor.get() and i[3] == self.tkgui.find_janr.get():
                 del_book_id = i[0]
-        con = Connection.connect()
+        con = self.tkgui.getconnect()
         with con:
             cur = con.cursor()
             cur.execute(f"DELETE FROM books WHERE idbooks = '{del_book_id}';")
@@ -364,14 +160,13 @@ class Actions:
         messagebox.showinfo("Успех!", "Книга удалена из базы!")
         Actions.find_clearing()
 
-    @staticmethod
-    def save_book(book_id):
+    def save_book(self, book_id):
         """
         Функция сохраняет введенные изменения по книге в БД
         :param book_id: Порядковый номер книги в БД
         :return: None
         """
-        con = Connection.connect()
+        con = self.tkgui.getconnect()
         with con:
             cur = con.cursor()
             cur.execute(f"UPDATE books \
@@ -381,32 +176,52 @@ class Actions:
             WHERE (idbooks = '{book_id}');")
             con.commit()
             messagebox.showinfo("Успех!", "Изменения внесены в базу!")
-            Actions.find_clearing()
+            self.find_clearing()
 
-    @staticmethod
-    def change_book(book_id):
+    def change_book(self, book_id):
         """
         Функция кнопки "Внести изменения". Делает доступными соответствубщие кнопки и поля
         :param book_id: Порядковый номер книги в БД
         :return: book_id - Порядковый номер книги в БД
         """
-        tkgui.change_button.configure(state="disabled")
-        Actions.change_config()
+        self.tkgui.change_button.configure(state="disabled")
+        self.change_config()
         return book_id
 
-    @staticmethod
-    def change_config():
+    def change_config(self):
         """
         Делает доступными соответствубщие кнопки и поля
         :return: None
         """
-        tkgui.find_name.configure(state="normal")
-        tkgui.find_autor.configure(state="normal")
-        tkgui.find_janr.configure(state="normal")
-        tkgui.del_button.configure(state="disabled")
-        tkgui.find_next_button.configure(state="disabled")
-        tkgui.find_prev_button.configure(state="disabled")
-        tkgui.save_button.configure(state="normal")
+        self.tkgui.find_name.configure(state="normal")
+        self.tkgui.find_autor.configure(state="normal")
+        self.tkgui.find_janr.configure(state="normal")
+        self.tkgui.del_button.configure(state="disabled")
+        self.tkgui.find_next_button.configure(state="disabled")
+        self.tkgui.find_prev_button.configure(state="disabled")
+        self.tkgui.save_button.configure(state="normal")
+
+    def add_book(self):
+        """
+        Функция проверяет введенные пользователем данные и,
+        в случае корректности, записывает их в базу данных
+        :return: None
+        """
+        if self.tkgui.add_name.get() and self.tkgui.add_autor.get() and self.tkgui.add_janr.get():
+            new_book = Book(self.tkgui.add_name.get(), self.tkgui.add_autor.get(), self.tkgui.add_janr.get())
+            con = self.tkgui.getconnect()
+            with con:
+                cur = con.cursor()
+                if Search.search_for_book((f'{new_book.name}', f'{new_book.author}', f'{new_book.janr}'), con):
+                    cur.execute(f"INSERT INTO `books` (`name`, `author`, `janr`)\
+                                VALUES ('{new_book.name}', '{new_book.author}', '{new_book.janr}');")
+                    con.commit()
+                    messagebox.showinfo("Успех!", "Книга успешно добавлена в базу!")
+                    self.add_clearing()
+                else:
+                    messagebox.showinfo("Ошибка!", "Книга уже есть в базе!")
+        else:
+            messagebox.showinfo("Ошибка!", "Заполните все данные по книге!")
 
 
 class TkGUI:
@@ -449,10 +264,83 @@ class TkGUI:
         self.add_janr = Entry(self.add_tab, width="40")
         self.add_janr.grid(column=1, row=3, padx=0)
 
-        self.add_button = Button(self.add_tab, text="ДОБАВИТЬ В БАЗУ", command=Actions.add_book)
+        self.add_button = Button(self.add_tab, text="ДОБАВИТЬ В БАЗУ", command=self.add_book)
         self.add_button.grid(column=1, row=4, pady=10)
 
         # ---------------- Заполение вкладки "Поиск книги"--------------------
+        self.tab_find_book()
+
+        # ---------------- Заполение вкладки "Настройки"--------------------
+        # ---------------- Заполение данных "Настройки БД"--------------------
+        self.config_DB_string = Label(self.config_tab, text="Настройки БД:")
+        self.config_DB_string.grid(column=0, row=0, padx=10, pady=10, sticky=W)
+
+        self.bd_choice_var = IntVar()
+        self.bd_choice_var.set(2)
+        self.bd_choice1 = ttk.Radiobutton(self.config_tab, text='MySQL', variable=self.bd_choice_var, value=1)
+        self.bd_choice2 = ttk.Radiobutton(self.config_tab, text='SQLite3', variable=self.bd_choice_var, value=2)
+        self.bd_choice1.grid(column=1, row=0)
+        self.bd_choice2.grid(column=2, row=0)
+
+        self.login_DB_string = Label(self.config_tab, text="Логин:")
+        self.login_DB_string.grid(column=0, row=1, padx=10, pady=5, sticky=E)
+
+        self.login_DB_entry = Entry(self.config_tab, width="10", state="normal", text="Ravenom")
+        self.login_DB_entry.grid(column=1, row=1, padx=10, sticky=W)
+        self.login_DB_entry.insert(0, "Ravenom")
+
+        self.password_DB_string = Label(self.config_tab, text="Пароль:")
+        self.password_DB_string.grid(column=2, row=1, padx=10, pady=5, sticky=W)
+
+        self.password_DB_entry = Entry(self.config_tab, width="10", state="normal")
+        self.password_DB_entry.grid(column=3, row=1, padx=10, sticky=W)
+        self.password_DB_entry.insert(0, "Ravenom01")
+
+        self.name_DB_string = Label(self.config_tab, text="Имя БД:")
+        self.name_DB_string.grid(column=4, row=1, padx=10, pady=5, sticky=W)
+
+        self.name_DB_entry = Entry(self.config_tab, width="10", state="normal")
+        self.name_DB_entry.grid(column=5, row=1, padx=10, sticky=W)
+        self.name_DB_entry.insert(0, "Bookshelf")
+
+        self.save_conf_button = Button(self.config_tab, text="Проверить подключение", command=self.getconnect,
+                                       state="normal")
+        self.save_conf_button.grid(column=0, row=2)
+
+        # ---------------- Заполение данных "Насторойки выгрузки"--------------------
+
+        self.config_writer_string = Label(self.config_tab, text="Настройки выгрузки:")
+        self.config_writer_string.grid(column=0, row=3, padx=10, pady=10, sticky=W)
+
+        self.writer_var = IntVar()
+        self.writer_var.set(1)
+        self.save1 = ttk.Radiobutton(self.config_tab, text='в JSON', variable=self.writer_var, value=1)
+        self.save2 = ttk.Radiobutton(self.config_tab, text='в CSV', variable=self.writer_var, value=2)
+        self.save3 = ttk.Radiobutton(self.config_tab, text='в TXT', variable=self.writer_var, value=3)
+        self.save1.grid(column=1, row=3)
+        self.save2.grid(column=2, row=3)
+        self.save3.grid(column=3, row=3)
+
+        self.save_file_button = Button(self.config_tab, text="Выгрузить в файл", command=self.save_file, state="normal")
+        self.save_file_button.grid(column=0, row=4)
+
+        self.file_string = Label(self.config_tab, text="Имя файла:")
+        self.file_string.grid(column=1, row=4, padx=10, pady=10, sticky=W)
+
+        self.file_entry = Entry(self.config_tab, width="10", state="normal")
+        self.file_entry.grid(column=2, row=4, padx=10, sticky=W)
+
+        self.load_file_button = Button(self.config_tab, text="загрузить", command=self.load_file, state="normal")
+        self.load_file_button.grid(column=3, row=4)
+
+        self.result = None
+        self.book_id = None
+        self.save_driver = None
+        self.data = None
+
+        self.action = Actions(self)
+
+    def tab_find_book(self):
         self.find_var = IntVar()
         self.find_var.set(1)
 
@@ -511,74 +399,6 @@ class TkGUI:
                                  state="disabled")
         self.del_button.grid(column=2, row=8)
 
-        # ---------------- Заполение вкладки "Настройки"--------------------
-        # ---------------- Заполение данных "Настройки БД"--------------------
-        self.config_DB_string = Label(self.config_tab, text="Настройки БД:")
-        self.config_DB_string.grid(column=0, row=0, padx=10, pady=10, sticky=W)
-
-        self.bd_choice_var = IntVar()
-        self.bd_choice_var.set(1)
-        self.bd_choice1 = ttk.Radiobutton(self.config_tab, text='MySQL', variable=self.bd_choice_var, value=1)
-        self.bd_choice2 = ttk.Radiobutton(self.config_tab, text='SQLite3', variable=self.bd_choice_var, value=2)
-        self.bd_choice1.grid(column=1, row=0)
-        self.bd_choice2.grid(column=2, row=0)
-
-        self.login_DB_string = Label(self.config_tab, text="Логин:")
-        self.login_DB_string.grid(column=0, row=1, padx=10, pady=5, sticky=E)
-
-        self.login_DB_entry = Entry(self.config_tab, width="10", state="normal", text="Ravenom")
-        self.login_DB_entry.grid(column=1, row=1, padx=10, sticky=W)
-        self.login_DB_entry.insert(0, "Ravenom")
-
-        self.password_DB_string = Label(self.config_tab, text="Пароль:")
-        self.password_DB_string.grid(column=2, row=1, padx=10, pady=5, sticky=W)
-
-        self.password_DB_entry = Entry(self.config_tab, width="10", state="normal")
-        self.password_DB_entry.grid(column=3, row=1, padx=10, sticky=W)
-        self.password_DB_entry.insert(0, "Ravenom01")
-
-        self.name_DB_string = Label(self.config_tab, text="Имя БД:")
-        self.name_DB_string.grid(column=4, row=1, padx=10, pady=5, sticky=W)
-
-        self.name_DB_entry = Entry(self.config_tab, width="10", state="normal")
-        self.name_DB_entry.grid(column=5, row=1, padx=10, sticky=W)
-        self.name_DB_entry.insert(0, "Bookshelf")
-
-        self.save_conf_button = Button(self.config_tab, text="Проверить подключение", command=Connection.connect,
-                                       state="normal")
-        self.save_conf_button.grid(column=0, row=2)
-
-        # ---------------- Заполение данных "Насторойки выгрузки"--------------------
-
-        self.config_writer_string = Label(self.config_tab, text="Настройки выгрузки:")
-        self.config_writer_string.grid(column=0, row=3, padx=10, pady=10, sticky=W)
-
-        self.writer_var = IntVar()
-        self.writer_var.set(1)
-        self.save1 = ttk.Radiobutton(self.config_tab, text='в JSON', variable=self.writer_var, value=1)
-        self.save2 = ttk.Radiobutton(self.config_tab, text='в CSV', variable=self.writer_var, value=2)
-        self.save3 = ttk.Radiobutton(self.config_tab, text='в TXT', variable=self.writer_var, value=3)
-        self.save1.grid(column=1, row=3)
-        self.save2.grid(column=2, row=3)
-        self.save3.grid(column=3, row=3)
-
-        self.save_file_button = Button(self.config_tab, text="Выгрузить в файл", command=self.save_file, state="normal")
-        self.save_file_button.grid(column=0, row=4)
-
-        self.file_string = Label(self.config_tab, text="Имя файла:")
-        self.file_string.grid(column=1, row=4, padx=10, pady=10, sticky=W)
-
-        self.file_entry = Entry(self.config_tab, width="10", state="normal")
-        self.file_entry.grid(column=2, row=4, padx=10, sticky=W)
-
-        self.load_file_button = Button(self.config_tab, text="загрузить", command=self.load_file, state="normal")
-        self.load_file_button.grid(column=3, row=4)
-
-        self.result = None
-        self.book_id = None
-        self.save_driver = None
-        self.data = None
-
     def main(self):
         """
         Запускает основное окно (цикл)
@@ -586,12 +406,15 @@ class TkGUI:
         """
         self.root.mainloop()
 
+    def add_book(self):
+        self.action.add_book()
+
     def search(self):
         """
         Функция кнопки поиска
         :return: None
         """
-        self.result = Actions.find_book()
+        self.result = self.action.find_book()
         self.book_id = self.result[0][0]
 
     def next_result(self):
@@ -599,51 +422,46 @@ class TkGUI:
         Функция кнопки следующий результат
         :return: None
         """
-        self.book_id = Actions.next_result(self.result)
+        self.book_id = self.action.next_result(self.result)
 
     def prev_result(self):
         """
         Функция кнопки предыдущий результат
         :return: None
         """
-        self.book_id = Actions.prev_result(self.result)
+        self.book_id = self.action.prev_result(self.result)
 
     def delete_book(self):
         """
         Функция кнопки удалить книгу
         :return: None
         """
-        Actions.del_book(self.result)
+        self.action.del_book(self.result)
 
     def change_book(self):
         """
         Функция кнопки изменить книгу
         :return: None
         """
-        Actions.change_book(self.book_id)
+        self.action.change_book(self.book_id)
 
     def save_book(self):
         """
         Функция кнопки сохранить изменения
         :return: None
         """
-        Actions.save_book(self.book_id)
+        self.action.save_book(self.book_id)
 
     def save_file(self):
         """
         Функция кнопки выгрузить книги в файл
         :return: None
         """
-        TkGUI.verify_path(self.file_entry.get())
-        con = Connection.connect()
-        with con:
-            cur = con.cursor()
-            if tkgui.find_var.get() == 1:
-                cur.execute(f"SELECT * FROM `books`;")
-            self.data = list(cur.fetchall())
+        self.verify_path(self.file_entry.get())
+        con = self.getconnect()
         if self.file_entry.get():
-            self.save_driver = SaveLoad(self.data, self.file_entry.get())
-            self.save_driver.write()
+            driver = SaveLoad(self.file_entry.get(), tkgui.writer_var.get(), con)
+            driver.write()
         else:
             logging.warning("Не выбрано имя файла!")
 
@@ -653,8 +471,9 @@ class TkGUI:
         :return: None
         """
         if self.file_entry.get():
-            self.save_driver = SaveLoad(self.data, self.file_entry.get())
-            self.save_driver.read()
+            con = self.getconnect()
+            driver = SaveLoad(self.file_entry.get(), tkgui.writer_var.get(), con)
+            driver.read()
         else:
             logging.warning("Не выбрано имя файла!")
 
@@ -675,6 +494,10 @@ class TkGUI:
                 counter -= 1
         if len(path) and not os.path.exists(path):
             os.makedirs(path)
+
+    def getconnect(self):
+        return Connection.connect(self.bd_choice_var.get(), self.name_DB_entry.get(),
+                                  self.login_DB_entry.get(), self.password_DB_entry.get())
 
 
 if __name__ == '__main__':
